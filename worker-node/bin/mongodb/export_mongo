@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "use ycsb
+db.usertable.getShardDistribution()
+db.usertable.stats()" | /home/ubuntu/mongodb/current/bin/mongo > /root/mongo_stats.txt

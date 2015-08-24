@@ -1,0 +1,20 @@
+#!/bin/bash
+# Optionally, we may be passed a workload comment, use it to select the file to log to
+if [ ! -z "$1" ]; then
+        date > /mnt/$1.compstat
+fi
+
+PENDINGTASKS="1"
+while [ "$PENDINGTASKS" -gt "0" ]; do
+        if [ ! -z "$1" ]; then
+                /opt/couchbase/bin/cbstats 127.0.0.1:11211 all | grep ep_pending_compactions | tee -a /var/log/cassandra/$1.compstat
+        else
+                /opt/couchbase/bin/cbstats 127.0.0.1:11211 all | grep ep_pending_compactions
+        fi
+        PENDINGTASKS=`/opt/couchbase/bin/cbstats 127.0.0.1:11211 all | grep ep_pending_compactions | grep -o '[0-9]*$'`
+        if [ "$PENDINGTASKS" -gt "0" ]; then sleep 15; fi
+done
+
+if [ ! -z "$1" ]; then
+        date >> /mnt/$1.compstat
+fi

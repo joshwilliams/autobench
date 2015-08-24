@@ -1,0 +1,22 @@
+#!/bin/sh
+#/usr/bin/nodetool compactionstats | grep '^pending tasks' pending-no | grep -o '[0-9]*$'
+
+# Optionally, we may be passed a workload comment, use it to select the file to log to
+if [ ! -z "$1" ]; then
+	date > /var/log/cassandra/$1.compstat
+fi
+
+PENDINGTASKS="2"
+while [ "$PENDINGTASKS" -gt "1" ]; do
+	if [ ! -z "$1" ]; then
+		/home/ubuntu/cassandra/current/bin/nodetool compactionstats | tee -a /var/log/cassandra/$1.compstat
+	else
+		/home/ubuntu/cassandra/current/bin/nodetool compactionstats
+	fi
+        PENDINGTASKS=`/home/ubuntu/cassandra/current/bin/nodetool compactionstats | grep '^pending tasks' | grep -o '[0-9]*$'`
+        if [ "$PENDINGTASKS" -gt "1" ]; then sleep 15; fi
+done
+
+if [ ! -z "$1" ]; then
+	date >> /var/log/cassandra/$1.compstat
+fi

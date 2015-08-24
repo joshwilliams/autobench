@@ -1,0 +1,48 @@
+#!/bin/bash
+#if [ -f /etc/node_id -a ! -f /home/ubuntu/cassandra/current/conf/cassandra.yaml ]; then
+if [ -f /etc/node_id ]; then
+	NODEID=`cat /etc/node_id`
+	TESTNAME=`cat /etc/node_testname`
+        TESTDATE=`cat /etc/node_testdate`
+	LOCALIP=`curl -s http://169.254.169.254/2011-05-01/meta-data/local-ipv4`
+	HEADNODE="10.136.71.116"
+	if [ -f /etc/node_headnode ]; then
+		HEADNODE=`cat /etc/node_headnode`
+	fi
+
+	if [ -f /etc/node_master ]; then
+		MASTERIP=`cat /etc/node_master`
+	fi
+
+	ln -s /root/bin/couchbase/db_ready /root/bin/db_ready
+
+	mkdir -p /mnt/couchbase/data
+	chown couchbase: -R /mnt/couchbase
+	#su - ubuntu -c 'couchbase/current/bin/couchbase-server -- -noinput -detached >/var/log/couchbase/couchbase.log 2>/var/log/couchbase/couchbase.log'
+	/etc/init.d/couchbase-server start
+
+	# Borrow from cassandra-env.sh
+	system_memory_in_mb=`free -m | awk '/:/ {print $2;exit}'`
+	three_quarters_memory=`expr $system_memory_in_mb / 4 '*' 3`
+	three_fifth_memory=`expr $system_memory_in_mb / 5 '*' 3`
+	#half_memory=`expr $system_memory_in_mb / 2`
+	sleep 5
+	LOOPS=0
+	ss -tln | grep :8091
+	while [ "$?" -gt "0" -a "$LOOPS" -lt "7" ]; do
+		echo "Waiting for control port 8091 to appear"
+		sleep 5
+		LOOPS=`expr $LOOPS + 1`
+		ss -tln | grep :8091
+	done
+	sleep 5
+
+	if [ "$NODEID" == "1" ]; then
+		/opt/couchbase/bin/couchbase-cli cluster-init -c localhost -u Administrator -p password --cluster-init-ramsize=$three_fifth_memory --cluster-init-username=Administrator --cluster-init-password=password --cluster-init-port=8091 -d
+		/opt/couchbase/bin/couchbase-cli bucket-create -c localhost -u Administrator -p password --bucket=default --bucket-type=couchbase --bucket-port=11211 --bucket-ramsize=$three_fifth_memory --bucket-replica=0 --bucket-eviction-policy=fullEviction --enable-flush=1 -d
+	else
+		sleep 5
+		/opt/couchbase/bin/couchbase-cli rebalance -c $MASTERIP -u Administrator -p password --server-add=$LOCALIP --server-add-username=Administrator --server-add-password=password -d
+	fi
+	psql -AX -qt -U root -h $HEADNODE root -c "UPDATE ${TESTNAME}_${TESTDATE}_data SET ready = true WHERE instance_ip = '${LOCALIP}'"
+fi

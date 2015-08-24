@@ -1,0 +1,40 @@
+#!/bin/bash
+if [ -f /etc/node_id ]; then
+	NODEID=`cat /etc/node_id`
+	TESTNAME=`cat /etc/node_testname`
+        TESTDATE=`cat /etc/node_testdate`
+	LOCALIP=`curl -s http://169.254.169.254/2011-05-01/meta-data/local-ipv4`
+	HEADNODE="10.136.71.116"
+	if [ -f /etc/node_headnode ]; then
+		HEADNODE=`cat /etc/node_headnode`
+	fi
+
+	NODEKEYSPACE=`cat /etc/node_keyspace`
+
+	if [ -f /etc/node_master ]; then
+		MASTERIP=`cat /etc/node_master`
+	fi
+
+	if [ "$NODEID" == "1" ]; then
+		TEMPLATE=cassandra.master
+	else
+		TEMPLATE=cassandra.slave
+	fi
+
+	sed /home/ubuntu/cassandra/$TEMPLATE \
+		-e"s/__TESTNAME__/$TESTNAME/" \
+		-e"s/__KEYSPACE__/$NODEKEYSPACE/" \
+		-e"s/__MASTERIP__/$MASTERIP/" \
+		-e"s/__LOCALIP__/$LOCALIP/" \
+		>/home/ubuntu/cassandra/current/conf/cassandra.yaml
+
+	ln -s /root/bin/cassandra/db_ready /root/bin/db_ready
+fi
+
+if [ -f /home/ubuntu/cassandra/current/conf/cassandra.yaml ]; then
+	mkdir -p /mnt/cassandra
+	chown ubuntu: /mnt/cassandra
+	#service cassandra start
+	su - ubuntu -c 'cassandra/current/bin/cassandra >/var/log/cassandra/cassandra.log 2>/var/log/cassandra/cassandra.log'
+	psql -AX -qt -U root -h $HEADNODE root -c "UPDATE ${TESTNAME}_${TESTDATE}_data SET ready = true WHERE instance_ip = '${LOCALIP}'"
+fi

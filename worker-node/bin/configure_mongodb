@@ -1,0 +1,49 @@
+#!/bin/bash
+if [ -f /etc/node_id ]; then
+	NODEID=`cat /etc/node_id`
+
+	if [ "$NODEID" == "1" ]; then
+		#echo 'ENABLE_MONGOCFG="yes"' >> /etc/default/mongodb
+		#service mongocfg start
+		mkdir -p /mnt/mongodb/mongocfg
+		chown ubuntu: /mnt/mongodb/mongocfg
+		su - ubuntu -c 'mongodb/current/bin/mongod --fork --logpath /var/log/mongodb/mongocfg.log --logappend --dbpath /mnt/mongodb/mongocfg --configsvr'
+	fi
+	TESTNAME=`cat /etc/node_testname`
+        TESTDATE=`cat /etc/node_testdate`
+	LOCALIP=`curl -s http://169.254.169.254/2011-05-01/meta-data/local-ipv4`
+	HEADNODE="10.136.71.116"
+	if [ -f /etc/node_headnode ]; then
+		HEADNODE=`cat /etc/node_headnode`
+	fi
+
+	if [ -f /etc/node_master ]; then
+		MASTERIP=`cat /etc/node_master`
+	else
+		MASTERIP="$LOCALIP"
+	fi
+	#echo 'ENABLE_MONGOS="yes"' >> /etc/default/mongodb
+	#echo 'MONGO_MASTER="'"$MASTERIP"'"' >> /etc/default/mongodb
+	#service mongos start
+	mkdir -p /mnt/mongodb/mongodb
+	chown ubuntu: /mnt/mongodb/mongodb
+	#su - ubuntu -c 'mongodb/current/bin/mongod --fork --logpath /var/log/mongodb/mongodb.log --logappend --dbpath /mnt/mongodb/mongodb --shardsvr'
+	# MongoDB 2.8 with new storage engine
+	su - ubuntu -c 'mongodb/current/bin/mongod --fork --logpath /var/log/mongodb/mongodb.log --logappend --dbpath /mnt/mongodb/mongodb --shardsvr --storageEngine wiredTiger'
+	# Wait a few seconds for node initialization
+	sleep 10
+	su - ubuntu -c "mongodb/current/bin/mongos --fork --logpath /var/log/mongodb/mongos.log --logappend --configdb $MASTERIP"
+	# Wait a few seconds for node initialization
+	sleep 10
+
+
+	# Add in the local shard into the cluster through the local mongos
+	if [ ! -f /etc/node_mongo_configured ]; then
+		sleep 5
+		echo 'sh.addShard( "'"$LOCALIP"':27018" )' | su - ubuntu -c 'mongodb/current/bin/mongo'
+		touch /etc/node_mongo_configured
+	fi
+
+	ln -s /root/bin/mongodb/db_ready /root/bin/db_ready
+	psql -AX -qt -U root -h $HEADNODE root -c "UPDATE ${TESTNAME}_${TESTDATE}_data SET ready = true WHERE instance_ip = '${LOCALIP}'"
+fi

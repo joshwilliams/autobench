@@ -1,0 +1,64 @@
+#!/bin/bash
+
+if [ -f /etc/node_id ]; then
+    # We've already talked back to the head node, so assume this has been done
+    ROLE=`cat /etc/node_role`
+    /root/bin/configure_$ROLE
+    exit 0
+fi
+
+# Wait a few seconds for the cloud-init userdata script to run
+while [ ! -f /etc/node_role ]; do
+    sleep 10
+done
+ROLE=`cat /etc/node_role`
+
+HEADNODE="10.136.71.116"
+if [ -f /etc/node_headnode ]; then
+    HEADNODE=`cat /etc/node_headnode`
+fi
+
+if [ ! -f /etc/node_testname -o ! -f /etc/node_testdate ]; then
+        # The cloud-init process may not have run yet, give it some time...
+        sleep 10
+    if [ ! -f /etc/node_testname -o ! -f /etc/node_testdate ]; then
+        # ... and maybe a little longer...
+        sleep 15
+    fi
+fi
+
+if [ -f /etc/node_testname -a -f /etc/node_testdate ]; then
+    TESTNAME=`cat /etc/node_testname`
+    TESTDATE=`cat /etc/node_testdate`
+    NODECLASS="$ROLE"
+    if [ "$ROLE" != "client" ]; then
+        NODECLASS="data"
+    fi
+
+    INSTANCEID=`curl -s http://169.254.169.254/2011-05-01/meta-data/instance-id`
+    INSTANCEIP=`curl -s http://169.254.169.254/2011-05-01/meta-data/local-ipv4`
+
+    if [ "$ROLE" == "cassandra" ]; then
+        NODEINFO=`psql -AX -qt -U root -h $HEADNODE root -c "INSERT INTO ${TESTNAME}_${TESTDATE}_${NODECLASS} (instance_id, instance_ip) VALUES ('${INSTANCEID}', '${INSTANCEIP}') RETURNING nodeid, keyspace"`
+    else
+        NODEINFO=`psql -AX -qt -U root -h $HEADNODE root -c "INSERT INTO ${TESTNAME}_${TESTDATE}_${NODECLASS} (instance_id, instance_ip) VALUES ('${INSTANCEID}', '${INSTANCEIP}') RETURNING nodeid"`
+    fi
+    echo ${NODEINFO%%|*} > /etc/node_id
+    echo ${NODEINFO#*|}  > /etc/node_keyspace
+
+    if [[ ${NODEINFO%%|*} != "1" ]]; then
+        MASTER=""
+        while [[ $MASTER == "" ]]; do
+            echo Give node 1 some time to appear as ready...
+            sleep 10
+            MASTER=`psql -AX -qt -U root -h $HEADNODE root -c "SELECT instance_ip FROM ${TESTNAME}_${TESTDATE}_${NODECLASS} WHERE ready AND nodeid = 1"`
+        done
+        echo Node 1 is $MASTER
+        echo $MASTER > /etc/node_master
+    fi
+else
+    echo "I don't see any node configuration, can't configure yet." >&2
+    exit 1
+fi
+
+/root/bin/configure_$ROLE

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Drop old AWS inventory tables after test are done
+
+if [ ! -z "$1" ]; then
+	WHERE="tablename like '$1%' and "
+fi
+psql -AXqtc "select tablename from pg_tables where $WHERE not tablename like 'result%' and schemaname='public';" | xargs -n 1 -I {} psql -c "DROP TABLE {};"

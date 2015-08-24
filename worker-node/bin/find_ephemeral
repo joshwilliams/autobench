@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Track down all the ephemeral disks, and create a RAID-0 across all of them
+
+BDEVMAPURL="http://169.254.169.254/2011-05-01/meta-data/block-device-mapping/"
+BDEVLIST=""
+BDEVCOUNT=0
+if ! mountpoint -q /mnt; then
+    # Build list of ephemeral devices
+    for adev in `curl -s http://169.254.169.254/2011-05-01/meta-data/block-device-mapping/`; do
+        if [ "${adev:0:9}" == "ephemeral" ]; then
+            bdev=`curl -s http://169.254.169.254/2011-05-01/meta-data/block-device-mapping/$adev`
+            if [ ! -z "$bdev" ]; then
+                # Rename from /dev/sd* to /dev/xvd*
+                BDEVLIST="$BDEVLIST /dev/${bdev/sd/xvd}"
+                BDEVCOUNT=$[BDEVCOUNT+1]
+            fi
+        fi
+    done
+
+    # Create then format the array
+    if [ ! -z "$BDEVLIST" ]; then
+        yes | mdadm --create /dev/md0 --force --level=0 --raid-devices=$BDEVCOUNT $BDEVLIST
+        mkfs.ext4 -L ephemeral /dev/md0
+        mount /mnt
+    fi
+fi

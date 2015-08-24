@@ -1,0 +1,66 @@
+THREADS="20"
+if [ -f /etc/node_threads ]; then
+	THREADS=`cat /etc/node_threads`
+fi
+
+if [ -z "$1" ]; then
+	echo "Please specify a workload file on the command line"
+	exit 1
+fi
+
+if [ ! -f /etc/node_datahosts ]; then
+	echo "I need a list of data node hosts." >&2
+	exit 1
+fi
+datahosts=`cat /etc/node_datahosts`
+datahostmaster=`cat /etc/node_datahosts | cut -d',' -f 1`
+datahostmastername=`dig +short -x $datahostmaster | sed -e 's/\.$//'`
+
+# Figure out database type from the testname
+TESTNAME=`cat /etc/node_testname`
+if [ "${TESTNAME:0:9}" == "cassandra" ]; then
+	dbtype="cassandra-10"
+	options='-p hosts='"$datahosts"
+fi
+if [ "${TESTNAME:0:7}" == "casscql" ]; then
+	dbtype="cassandra-cql"
+	options='-p hosts='"$datahosts"
+fi
+if [ "${TESTNAME:0:9}" == "couchbase" ]; then
+	dbtype="couchbase2"
+	options='-p couchbase.user= -p couchbase.password= -p couchbase.ddocs= -p couchbase.views= -p couchbase.hosts='"$datahosts"
+fi
+if [ "${TESTNAME:0:7}" == "mongodb" ]; then
+	dbtype="mongodb"
+	# Run mongos locally instead of on just a single node to better balance load
+	if [ ! -f /etc/node_mongo_uselocal ]; then
+		options='-p mongodb.url=mongodb://'"$datahostmaster"':27017'
+	else
+		options='-p mongodb.url=mongodb://127.0.0.1:27017'
+		pkill -0 mongos || su - ubuntu -c "mongodb/current/bin/mongos --fork --logpath /var/log/mongodb/mongos.log --logappend --configdb $datahostmaster"
+		sleep 5
+	fi
+fi
+if [ "${TESTNAME:0:5}" == "hbase" ]; then
+	dbtype="hbase"
+	options='-p columnfamily=data'
+	if [ ! -f hbase/src/main/conf/hbase-site.xml ]; then
+		echo "<?xml version=\"1.0\"?>
+<?xml-stylesheet type=\"text/xsl\" href=\"configuration.xsl\"?>
+<configuration>
+  <property>
+    <name>hbase.zookeeper.quorum</name>
+    <value>$datahostmastername</value>
+    <description>The directory shared by RegionServers.
+    </description>
+  </property>
+  <property>
+    <name>hbase.rootdir</name>
+    <value>hdfs://$datahostmastername/hbase</value>
+    <description>The directory shared by RegionServers.
+    </description>
+  </property>
+</configuration>" > hbase/src/main/conf/hbase-site.xml
+	fi
+fi
+

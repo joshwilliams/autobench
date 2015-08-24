@@ -1,0 +1,10 @@
+#!/bin/bash
+NODEID=`cat /etc/node_id`
+
+if [ "$NODEID" == "1" ]; then
+	LOCALIP=`curl -s http://169.254.169.254/2011-05-01/meta-data/local-ipv4`
+	for i in $(seq 5 -1 1)
+		do echo "$LOCALIP mongo load complete, ready for transfer or resuming in $i"
+		sleep 60
+	done
+fi

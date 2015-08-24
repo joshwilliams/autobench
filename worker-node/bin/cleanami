@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Prepare the running instance for AMI creation
+
+service cron stop
+service rsyslog stop
+service vnstat stop
+killall sadc
+
+rm /var/lib/vnstat/{.,}eth0
+rm -r /var/log/auth.log /var/log/boot.log /var/log/cassandra/* /var/log/cloud* /var/log/dmesg* /var/log/hadoop/* /var/log/kern.log /var/log/mail* /var/log/phone_home.log /var/log/syslog /var/log/sysstat/* /var/log/wtmp
+sync

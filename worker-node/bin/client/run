@@ -1,0 +1,12 @@
+#!/bin/bash
+
+cd /root/YCSB
+
+. /root/bin/client/common
+
+# This could be -v, or just about anything, just an indicator to write snapshots to output
+if [ -z "$2" ]; then
+	bin/ycsb run $dbtype -P workloads/$1 -threads $THREADS $options -s > /mnt/$1 2>/mnt/$1-snapshots
+else
+	bin/ycsb run $dbtype -P workloads/$1 -threads $THREADS $options -s 2>&1 > /mnt/$1 | tee /mnt/$1-snapshots
+fi

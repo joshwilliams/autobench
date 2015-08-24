@@ -1,0 +1,24 @@
+# Yahoo! Cloud System Benchmark
+# Workload 0 - Load settings, without maxexecutiontime
+
+fieldcount=10
+fieldlength=10
+recordcount={recordcount}
+insertcount={insertcount}
+insertretrycount=100
+retrydelay=50
+operationcount={operationcount}
+workload=com.yahoo.ycsb.workloads.CoreWorkload
+
+readallfields=true
+
+readproportion=0
+updateproportion=0.05
+scanproportion=0
+insertproportion=1
+
+requestdistribution=uniform
+
+mongodb.writeConcern=acknowledged
+couchbase.persistTo=ZERO
+hbase.durability=ASYNC_WAL

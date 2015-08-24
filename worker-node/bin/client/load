@@ -1,0 +1,32 @@
+#!/bin/bash
+
+if [ ! -f /etc/node_id ]; then
+	echo "I don't have a node ID, can't run load process." >&2
+	exit 1
+fi
+NODEID=`cat /etc/node_id`
+
+cd /root/YCSB
+
+. /root/bin/client/common
+
+# Work out the insertstart position
+INSERTCOUNT=`grep insertcount workloads/$1 | cut -d '=' -f 2`
+if [ -z $INSERTCOUNT ]; then
+	# Try to get the recordcount instead
+	INSERTCOUNT=`grep recordcount workloads/$1 | cut -d '=' -f 2`
+fi
+if [ -z $INSERTCOUNT ]; then
+	echo "Counldn't get the insertcount or recordcount from the workload"
+	exit 1
+fi
+INSERTSTART=$((($NODEID - 1)*$INSERTCOUNT))
+
+
+# This could be -v, or just about anything, just an indicator to write snapshots to output
+if [ -z "$2" ]; then
+	bin/ycsb load $dbtype -P workloads/$1 -threads $THREADS $options -p insertstart=$INSERTSTART -s > /mnt/load 2>/mnt/load-snapshots
+else
+	bin/ycsb load $dbtype -P workloads/$1 -threads $THREADS $options -p insertstart=$INSERTSTART -s 2>&1 > /mnt/load | tee /mnt/load-snapshots
+fi
+

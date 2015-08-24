@@ -1,0 +1,10 @@
+#!/bin/bash
+
+HEADNODE="10.114.169.103"
+if [ -f /etc/node_headnode ]; then
+        HEADNODE=`cat /etc/node_headnode`
+fi
+
+TESTNAME=`cat /etc/node_testname`
+TESTDATE=`cat /etc/node_testdate`
+rsync -a $HEADNODE:/root/tests/$TESTNAME/$TESTDATE/workloads/ /root/YCSB/workloads/
